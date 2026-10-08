@@ -105,15 +105,7 @@ The Windows 11-only package declares `runFullTrust`, `location`, and `unvirtuali
 
 **Remaining Store blocker:** [MSIX has no general uninstall hook or declarative Task Scheduler cleanup](https://github.com/microsoft/WindowsAppSDK/discussions/3061). Turn OFF before uninstalling; this removes the task and restores the saved theme. Uninstalling while ON removes the alias but can leave an inert scheduled task behind. This pipeline does not claim unconditional uninstall cleanup or Store approval; production Store rollout needs this limitation reviewed in certification. Adding a resident cleanup service or fragile uninstall workaround would conflict with AutoDark's purpose.
 
-Before a release, manually verify installer installation, Start shortcut, Installed apps entry, same-folder upgrade, and uninstall while ON (task removed and previous theme restored). Also verify on Windows 11 x64: UI/icon/high DPI; ON applies both real registry values; a task runs and exits with the UI closed; OFF removes the task and restores the original mixed theme; resume/restart/logon recovery; no resident process. For MSIX, use a properly signed development package or Partner Center flight, test installation/consent/real registry writes, alias `--self-test` and `--scheduled` invocation, then update to the next version without opening the UI and run the existing task. Confirm OFF-before-uninstall cleanup; also record the known orphan-task behavior if uninstalling while ON. CI is not Windows integration or certification testing.
 
-Troubleshooting: invalid tags fail version validation; compilation/test failures stop releases; extra single-file outputs or malformed bundles stop artifact publication; invalid Store identity overrides or missing SDK tools fail only the Store job; MakeAppx/capability errors require the job log and manifest review. `-SkipAudit` on the local portable script is only for an offline build with already-cached Microsoft dependencies when NuGet's audit endpoint is unavailable; CI keeps auditing enabled.
-
-Create the next release after committing the changes:
-
-```powershell
-git tag v1.0.1
-git push origin v1.0.1
 ```
 
 [Privacy policy](PRIVACY.md) | [MIT license](LICENSE.txt)
