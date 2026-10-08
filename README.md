@@ -6,7 +6,7 @@ Press **ON** to use light mode between astronomical sunrise and sunset, and dark
 
 ## Use
 
-1. Extract the portable win-x64 release to a permanent folder in your user account. Run `AutoDark.exe` normally, without administrator privileges.
+1. Download `AutoDark.exe` from GitHub Releases, or extract `AutoDark-win-x64.zip`, to a permanent folder in your user account. Run `AutoDark.exe` normally, without administrator privileges.
 2. Press **ON** and approve Windows location access if offered. If unavailable, the Location dialog opens. Uncheck **Use Windows location**, enter latitude/longitude, and Save. North/east are positive; south/west are negative.
 3. AutoDark registers its task, applies the current theme immediately, and shows the next change in your current Windows time zone. Close the window.
 4. Reopen and press **ON** to turn it **OFF**. OFF removes the task and restores the app/system theme settings saved before ON. If removal fails, the saved OFF state prevents future theme changes and the UI reports the remaining task so you can retry removal.
@@ -18,9 +18,9 @@ The button text shows the current state, not the next action. An older already-e
 Install Visual Studio 2026 with **.NET desktop development**, the .NET 10 SDK, and a Windows SDK. Open the existing `AutoDark.slnx`. No additional project or third-party NuGet package is required; .NET restores Microsoft's Windows SDK projections for built-in WinRT location APIs.
 
 1. Select **Release** and build the solution. Launch `AutoDark.exe` directly or use Ctrl+F5. Administrator privileges are not needed.
-2. Right-click `Form1.cs` ? **View Designer**; also open `LocationForm.cs` in the Designer. Both use partial classes, standard controls, and `InitializeComponent`; construction performs no registry/task work. Check 100%, 150%, and 200% display scaling and keyboard navigation.
+2. Right-click `Form1.cs` and select **View Designer**; also open `LocationForm.cs` in the Designer. Both use partial classes, standard controls, and `InitializeComponent`; construction performs no registry/task work. Check 100%, 150%, and 200% display scaling and keyboard navigation.
 3. Press ON. Test both Windows location consent and manual fallback. Check both DWORDs in `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`: light = `1`, dark = `0` for `AppsUseLightTheme` and `SystemUsesLightTheme`.
-4. Open Task Scheduler ? Task Scheduler Library. Find `AutoDark-<your Windows SID>`. It should use your account, **Run only when user is logged on**, and no highest-privilege option. Check the action points to the exact executable with `--scheduled`, and the next one-shot trigger matches the displayed change. Repeated ON/OFF cycles must not create additional tasks.
+4. Open **Task Scheduler > Task Scheduler Library**. Find `AutoDark-<your Windows SID>`. It should use your account, **Run only when user is logged on**, and no highest-privilege option. Check the action points to the portable executable (or the packaged app execution alias) with `--scheduled`, and the next one-shot trigger matches the displayed change. Repeated ON/OFF cycles must not create additional tasks.
 5. Close AutoDark and verify no `AutoDark.exe` remains in Task Manager. Select **Run** on its task; verify it exits and Last Run Result is `0x0`. Observe a real sunrise/sunset transition. Test sleep across a transition, resume/unlock, sign-out/logon, restart/logon, clock changes, time-zone changes, and battery operation.
 6. Reopen, turn OFF, and verify the task disappears. Running `AutoDark.exe --scheduled` while OFF must not change the theme or create a task. Test location disabled and a moved executable; errors must be visible on reopening.
 
@@ -33,14 +33,15 @@ dotnet bin/Release/net10.0-windows10.0.19041.0/AutoDark.dll --self-test
 # Exit code 0 means all checks passed. No windows, registry writes, or task writes.
 dotnet bin/Release/net10.0-windows10.0.19041.0/AutoDark.dll --validate-task
 # Read-only validation through the actual Task Scheduler API; no task is registered.
-dotnet publish AutoDark.csproj -c Release -r win-x64 --self-contained true -o artifacts/win-x64
+./scripts/Test-ReleaseTools.ps1
+./scripts/Build-Portable.ps1 -Tag v1.0.1 -Output artifacts/release-local
 ```
 
 `--scheduled` returns 0 on success, 1 on failure; invalid arguments return 2. Scheduled mode branches before `ApplicationConfiguration.Initialize` and does not create a form/message loop. `--render-ui <directory>` is an optional visual verification mode that briefly opens both forms and saves PNGs. The dependency-free checks live in `SelfTests.cs` to keep the original single-project solution.
 
 ## How it works
 
-- **Solar calculation:** NOAA/Meeus solar-position equations compute apparent sunrise/sunset at a geometric solar-center elevation of **-0.833�**, accounting for conventional refraction and the solar disk. AutoDark searches UTC instants locally at five-minute intervals, checks intervening extrema to catch grazing polar events, then bisects crossings to within half a second and rounds execution forward. It searches up to 370 days, allowing polar day/night. This numerical precision is not observational accuracy: expect roughly 1�2 minutes at ordinary latitudes under standard conditions, with larger deviations near the poles, mountains, unusual refraction, or an obstructed horizon. It does not model terrain/elevation/weather. [NOAA method and accuracy notes](https://gml.noaa.gov/grad/solcalc/calcdetails.html).
+- **Solar calculation:** NOAA/Meeus solar-position equations compute apparent sunrise/sunset at a geometric solar-center elevation of **-0.833 degrees**, accounting for conventional refraction and the solar disk. AutoDark searches UTC instants locally at five-minute intervals, checks intervening extrema to catch grazing polar events, then bisects crossings to within half a second and rounds execution forward. It searches up to 370 days, allowing polar day/night. This numerical precision is not observational accuracy: expect roughly 1-2 minutes at ordinary latitudes under standard conditions, with larger deviations near the poles, mountains, unusual refraction, or an obstructed horizon. It does not model terrain/elevation/weather. [NOAA method and accuracy notes](https://gml.noaa.gov/grad/solcalc/calcdetails.html).
 - **Time zone/DST:** transitions are absolute UTC instants. Windows `TimeZoneInfo.Local` converts them for display, with the offset applicable to that date. Switching time zones alone does not change the sun's position at saved coordinates; update location when travelling.
 - **Theme:** the current user's two Personalize registry DWORDs are changed only when needed, then read back. A bounded `WM_SETTINGCHANGE` broadcast with `ImmersiveColorSet` informs other applications. Explorer is not restarted. Some third-party applications may require reopening; a hung/nonresponsive application may miss the notification.
 - **Task Scheduler:** native `Schedule.Service` COM APIs register/update exactly one SID-named task. XML separates the executable path from fixed arguments and escapes paths safely; no shell, script, password, or elevation is involved. It uses an interactive user token, allows battery execution, `StartWhenAvailable`, three one-minute failure retries, and a two-minute execution limit. A named mutex serializes UI and CLI changes in the same session.
@@ -117,6 +118,6 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-[Privacy policy](PRIVACY.md) � [MIT license](LICENSE.txt)
+[Privacy policy](PRIVACY.md) | [MIT license](LICENSE.txt)
 
 Copyright (c) 2026 Danilo Stoletović. Released under the MIT license.
