@@ -60,6 +60,6 @@ GitHub Actions builds on Windows using .NET 10, runs focused tests, and publishe
 
 The app has explicit version/description metadata and remains a conventional per-user desktop executable. MSIX/signing/Store identity are intentionally deferred. A future Store package will need full-trust desktop configuration, location capability/consent review, stable installed-path/update handling for its scheduled action, and Store-policy validation of Task Scheduler behavior. This repository is not a certified Store package.
 
-[Privacy policy](PRIVACY.md) � [MIT license](LICENSE.txt)
+[Privacy policy](PRIVACY.md)  [MIT license](LICENSE.txt)
 
 Copyright (c) 2026 Danilo Stoletović. Released under the MIT license.
