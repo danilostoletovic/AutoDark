@@ -70,28 +70,20 @@ Local portable build (Windows, .NET 10):
 # Use a fresh output directory; the script refuses stale output.
 ```
 
-**Microsoft Store:** reserve AutoDark in Partner Center and copy the exact values from Product identity into repository Actions variables:
+**Microsoft Store:** the manifest contains AutoDark's actual Partner Center identity. Store packaging runs on version tags by default. Repository Actions variables can override the committed identity when needed:
 
 | Variable | Value |
 | --- | --- |
-| `STORE_PACKAGING_ENABLED` | `true` to opt in; unset/false skips the Store job |
-| `STORE_IDENTITY_NAME` | Partner Center Package/Identity/Name |
-| `STORE_PUBLISHER` | Complete Partner Center Package/Identity/Publisher (`CN=...`) |
-| `STORE_PUBLISHER_DISPLAY_NAME` | Partner Center publisher display name |
+| `STORE_PACKAGING_ENABLED` | `false` skips the Store job; unset/true enables it |
+| `STORE_IDENTITY_NAME` | Package identity name from Partner Center |
+| `STORE_PUBLISHER` | Exact publisher distinguished name from Partner Center |
+| `STORE_PUBLISHER_DISPLAY_NAME` | Exact publisher display name from Partner Center |
 
-No identity is supplied or invented in the repository. Missing/placeholder identity values fail the opted-in Store job explicitly. That job runs separately from GitHub Release publication; its failure makes the workflow report failure but does not withhold valid EXE/ZIP assets.
+Use Partner Center for product and account identifiers. Invalid identity overrides fail explicitly. The Store job runs separately from GitHub Release publication; its failure makes the workflow report failure but does not withhold valid EXE/ZIP assets.
 
-Because [GitHub Actions artifacts are readable by repository readers](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts), public-repository artifacts are not confidential by themselves. Set the Actions **secret** `STORE_ARTIFACT_KEY_BASE64` to a base64-encoded, cryptographically random 32-byte key and keep a secure local copy. The Store job uploads only an authenticated AES-256-CBC/HMAC-SHA256 encrypted `.msix.enc` artifact, never a plaintext MSIX or key. This is artifact encryption, not package signing. Do not put the key or signing material in Git; no production certificates are generated. Generate the key locally using a secret manager or `RandomNumberGenerator`; enter it through GitHub's Secrets UI. Store-only submissions need no signing-certificate/password secret.
+Download `AutoDark-Store-submission-<version>` from the tag's Actions run (14-day retention) and extract the `.msix` for manual Partner Center submission. No encryption key or signing secret is required. The MSIX is an Actions artifact, not a GitHub Release asset. [Actions artifacts are accessible to repository readers](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts); artifacts in a public repository are not confidential.
 
-Download `AutoDark-Store-submission-<version>` from the tag's Actions run (14-day retention), extract the encrypted file, and decrypt it locally with the same key supplied through the environment:
-
-```powershell
-# Load STORE_ARTIFACT_KEY_BASE64 into the environment from your secure local copy.
-./scripts/Protect-StoreArtifact.ps1 -Mode Decrypt `
-  -InputFile AutoDark-1.0.1.0-x64.msix.enc -OutputFile AutoDark-1.0.1.0-x64.msix
-```
-
-For a local Store package, install the Windows 11 SDK and configure the three identity environment variables above, then run:
+For a local Store package, install the Windows 11 SDK, build the portable EXE for the same tag, then run (no identity environment variables are needed):
 
 ```powershell
 ./scripts/Build-Store.ps1 -Tag v1.0.1 `
@@ -99,7 +91,7 @@ For a local Store package, install the Windows 11 SDK and configure the three id
 # Optional -MakeAppxPath points to a Microsoft-signed SDK MakeAppx.exe.
 ```
 
-MakeAppx validates the manifest without `/nv`, packages the tested EXE and resized existing icon assets, then unpacks it for identity/version/architecture/entry-point/asset/hash checks. Output is `AutoDark-1.0.1.0-x64.msix`: an **unsigned Store submission candidate**, not a public sideload release. Upload the decrypted `.msix` under Partner Center's MSIX app submission Packages section, complete listing/privacy/capability declarations, and run Windows App Certification Kit plus the integration checklist below before submission. [Microsoft documents Store signing of MSIX submissions](https://learn.microsoft.com/en-us/windows/apps/publish/get-started): a CA-trusted signature is not needed for this Store submission path; the Store signs packages after certification. Identity checks, restricted-capability approval, and certification remain mandatory; unsigned packages are not automatically accepted or normally user-installable. Sideloading would need separate trusted SHA-256 signing with a certificate matching Publisher; this pipeline publishes no sideload MSIX.
+MakeAppx validates the manifest without `/nv`, packages the tested EXE and resized existing icon assets, then unpacks it for identity/version/architecture/entry-point/asset/hash checks. Output is `AutoDark-1.0.1.0-x64.msix`: an **unsigned Store submission candidate**, not a public sideload release. Upload the `.msix` under Partner Center's MSIX app submission Packages section, complete listing/privacy/capability declarations, and run Windows App Certification Kit plus the integration checklist below before submission. [Microsoft documents Store signing of MSIX submissions](https://learn.microsoft.com/en-us/windows/apps/publish/get-started): a CA-trusted signature is not needed for this Store submission path; the Store signs packages after certification. Identity checks, restricted-capability approval, and certification remain mandatory; unsigned packages are not automatically accepted or normally user-installable. Sideloading would need separate trusted SHA-256 signing with a certificate matching Publisher; this pipeline publishes no sideload MSIX.
 
 **Packaged Task Scheduler compatibility:** the only application-code change detects package identity and schedules `%LOCALAPPDATA%\Microsoft\WindowsApps\<PackageFamilyName>\AutoDark.Store.exe --scheduled`. Windows manages this [app execution alias](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/desktop-to-uwp-extensions), with a version-independent per-family path instead of a versioned WindowsApps installation directory. User SID, task name, interactive token, triggers, OFF removal, and zero-resident-process architecture stay the same. No shell/helper/service is installed. The alias must remain enabled in Windows Settings; an unavailable alias produces an explicit error. [Microsoft documents per-family aliases and their removal on uninstall](https://learn.microsoft.com/en-us/sysinternals/downloads/microsoft-store).
 
@@ -109,7 +101,7 @@ The Windows 11-only package declares `runFullTrust`, `location`, and `unvirtuali
 
 Before a release, manually verify on Windows 11 x64: UI/icon/high DPI; ON applies both real registry values; a task runs and exits with the UI closed; OFF removes the task and restores the original mixed theme; resume/restart/logon recovery; no resident process. For MSIX, use a properly signed development package or Partner Center flight, test installation/consent/real registry writes, alias `--self-test` and `--scheduled` invocation, then update to the next version without opening the UI and run the existing task. Confirm OFF-before-uninstall cleanup; also record the known orphan-task behavior if uninstalling while ON. CI is not Windows integration or certification testing.
 
-Troubleshooting: invalid tags fail version validation; compilation/test failures stop releases; extra single-file outputs or malformed bundles stop artifact publication; missing Store variables/key or SDK tools fail only the opted-in Store job; MakeAppx/capability errors require the job log and manifest review. `-SkipAudit` on the local portable script is only for an offline build with already-cached Microsoft dependencies when NuGet's audit endpoint is unavailable; CI keeps auditing enabled.
+Troubleshooting: invalid tags fail version validation; compilation/test failures stop releases; extra single-file outputs or malformed bundles stop artifact publication; invalid Store identity overrides or missing SDK tools fail only the Store job; MakeAppx/capability errors require the job log and manifest review. `-SkipAudit` on the local portable script is only for an offline build with already-cached Microsoft dependencies when NuGet's audit endpoint is unavailable; CI keeps auditing enabled.
 
 Create the next release after committing the changes:
 

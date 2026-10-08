@@ -94,7 +94,7 @@ jobs:
           gh release edit "$env:RELEASE_TAG" --draft=false
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
   store:
-    if: startsWith(github.ref, 'refs/tags/v') && vars.STORE_PACKAGING_ENABLED == 'true'
+    if: startsWith(github.ref, 'refs/tags/v') && vars.STORE_PACKAGING_ENABLED != 'false'
     needs: build
     runs-on: windows-2025
     steps:
@@ -105,13 +105,6 @@ jobs:
         with:
           name: AutoDark-release
           path: artifacts/input
-      - name: Check private artifact prerequisite
-        shell: pwsh
-        env:
-          STORE_ARTIFACT_KEY_BASE64: ${{ secrets.STORE_ARTIFACT_KEY_BASE64 }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:STORE_ARTIFACT_KEY_BASE64)) { throw 'Store enabled but STORE_ARTIFACT_KEY_BASE64 secret is missing' }
-          if ([Convert]::FromBase64String($env:STORE_ARTIFACT_KEY_BASE64).Length -ne 32) { throw 'Store artifact secret must encode 32 random bytes' }
       - name: Package and validate Store submission candidate
         shell: pwsh
         env:
@@ -120,19 +113,11 @@ jobs:
           STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
           STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
         run: ./scripts/Build-Store.ps1 -Tag $env:RELEASE_TAG -Executable artifacts/input/AutoDark.exe
-      - name: Encrypt Store artifact for private retrieval
-        shell: pwsh
-        env:
-          STORE_ARTIFACT_KEY_BASE64: ${{ secrets.STORE_ARTIFACT_KEY_BASE64 }}
-        run: |
-          $package = @(Get-ChildItem artifacts/store/*.msix)
-          if ($package.Count -ne 1) { throw 'Expected exactly one validated Store package' }
-          ./scripts/Protect-StoreArtifact.ps1 -Mode Encrypt -InputFile $package[0].FullName -OutputFile ($package[0].FullName + '.enc')
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: AutoDark-Store-submission-${{ needs.build.outputs.version }}
           overwrite: true
-          path: artifacts/store/*.msix.enc
+          path: artifacts/store/*.msix
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

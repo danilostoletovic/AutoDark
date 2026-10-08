@@ -368,7 +368,7 @@ artifacts/
 .codex/
 .agents/
 .aws/
-# Private signing and Store artifact key material
+# Private signing material
 *.pfx
 *.p12
 *.pem

@@ -8,6 +8,11 @@ param(
     [string] $MakeAppxPath
 )
 . "$PSScriptRoot/ReleaseTools.ps1"
+$root = Split-Path $PSScriptRoot -Parent
+[xml]$manifest = [IO.File]::ReadAllText((Join-Path $root 'packaging/AppxManifest.xml'))
+if ([string]::IsNullOrWhiteSpace($IdentityName)) { $IdentityName = $manifest.Package.Identity.Name }
+if ([string]::IsNullOrWhiteSpace($Publisher)) { $Publisher = $manifest.Package.Identity.Publisher }
+if ([string]::IsNullOrWhiteSpace($PublisherDisplayName)) { $PublisherDisplayName = $manifest.Package.Properties.PublisherDisplayName }
 $version = Get-ReleaseVersion $Tag
 foreach ($value in @($IdentityName, $Publisher, $PublisherDisplayName)) {
     if ([string]::IsNullOrWhiteSpace($value) -or $value -match '@@|(?i:placeholder|your[_ -]|example)') {
@@ -34,14 +39,12 @@ $toolSignature = Get-AuthenticodeSignature -LiteralPath $MakeAppxPath
 if ($toolSignature.Status -ne 'Valid' -or $toolSignature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
     throw 'MakeAppx must have a valid Microsoft Authenticode signature.'
 }
-$root = Split-Path $PSScriptRoot -Parent
 $outputPath = [IO.Path]::GetFullPath($Output)
 if (Test-Path -LiteralPath $outputPath) { throw 'Choose a new, empty Store output directory.' }
 $layout = Join-Path $outputPath 'layout'
 $assets = Join-Path $layout 'Assets'
 New-Item -ItemType Directory -Path $assets -Force | Out-Null
 Copy-Item -LiteralPath $Executable -Destination (Join-Path $layout 'AutoDark.exe')
-[xml]$manifest = [IO.File]::ReadAllText((Join-Path $root 'packaging/AppxManifest.xml'))
 $manifest.Package.Identity.Name = $IdentityName
 $manifest.Package.Identity.Publisher = $Publisher
 $manifest.Package.Identity.Version = $version.PackageVersion
@@ -84,7 +87,13 @@ if (!$actual.SelectSingleNode('//u5:ExecutionAlias[@Alias="AutoDark.Store.exe"]'
     !$actual.SelectSingleNode('//v:ExcludedKey[text()="HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"]',$namespaces)) {
     throw 'Missing stable activation alias or theme registry virtualization exclusion.'
 }
-foreach ($required in @('AutoDark.exe','AppxManifest.xml','AppxBlockMap.xml','[Content_Types].xml',
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::OpenRead($package)
+try {
+    if (!$archive.GetEntry('[Content_Types].xml')) { throw 'MSIX is missing [Content_Types].xml.' }
+}
+finally { $archive.Dispose() }
+foreach ($required in @('AutoDark.exe','AppxManifest.xml','AppxBlockMap.xml',
     'Assets/StoreLogo.png','Assets/Square44x44Logo.png','Assets/Square150x150Logo.png')) {
     if (!(Test-Path -LiteralPath (Join-Path $unpacked $required))) { throw "MSIX is missing $required" }
 }
