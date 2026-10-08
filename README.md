@@ -6,7 +6,7 @@ Press **ON** to use light mode between astronomical sunrise and sunset, and dark
 
 ## Use
 
-1. Download `AutoDark.exe` from GitHub Releases, or extract `AutoDark-win-x64.zip`, to a permanent folder in your user account. Run `AutoDark.exe` normally, without administrator privileges.
+1. Download and run `AutoDark-Setup-win-x64.exe` from GitHub Releases, then open AutoDark from Start. It installs for your Windows account without administrator privileges. Alternatively, extract `AutoDark-win-x64.zip` to a permanent folder and run `AutoDark.exe`.
 2. Press **ON** and approve Windows location access if offered. If unavailable, the Location dialog opens. Uncheck **Use Windows location**, enter latitude/longitude, and Save. North/east are positive; south/west are negative.
 3. AutoDark registers its task, applies the current theme immediately, and shows the next change in your current Windows time zone. Close the window.
 4. Reopen and press **ON** to turn it **OFF**. OFF removes the task and restores the app/system theme settings saved before ON. If removal fails, the saved OFF state prevents future theme changes and the UI reports the remaining task so you can retry removal.
@@ -57,17 +57,23 @@ AutoDark has no idle process after its UI closes; Windows still runs its own Tas
 
 ## Distribution and releases
 
-**GitHub Releases:** download `AutoDark.exe` and put it in a permanent folder, or extract `AutoDark-win-x64.zip` (the same EXE). No installer or separately installed .NET runtime is required. These binaries are unsigned; Windows SmartScreen may warn, and no trust/reputation claim is made. Turn OFF before moving/replacing a portable EXE, then ON from its new location: its scheduled task uses that exact path. The compressed, untrimmed EXE includes .NET; required native components extract to the normal per-user temporary cache on first run. No resident service is added.
+**GitHub Releases:** use `AutoDark-Setup-win-x64.exe` for a normal per-user installation in `%LOCALAPPDATA%\Programs\AutoDark`, with a Start menu shortcut and an entry in **Settings > Apps > Installed apps**. Close AutoDark before installing an update into the same folder. Uninstall through Installed apps; the uninstaller calls `--disable` to remove the scheduled task and restore the saved theme before removing files. Cleanup failure stops uninstall and shows an error. Preferences are retained for reinstalling. Uninstall initialization disables automation even if you cancel the later Windows uninstall confirmation.
 
-The existing workflow runs Release builds, application checks, and release-tool checks on PRs and pushes to main/master. Stable `vMAJOR.MINOR.PATCH` tags additionally publish/validate the EXE and ZIP, then create or update one GitHub Release with both assets. New releases stay drafts until uploads succeed. Concurrency prevents conflicting runs; only the release job has write permission. PRs receive no Store secrets. Successful retries replace assets; do not retag v1.0.0.
+The optional `AutoDark-win-x64.zip` contains the standalone EXE for portable use. Turn OFF before moving a portable copy or switching to the installer, then ON from the installed copy. Both use the same preferences and user task. No separate .NET installation is required. Downloads are unsigned and Windows SmartScreen may warn. The bundled native components extract to a per-user temporary cache on first run; no service or resident process is added.
+
+The existing workflow runs Release builds, application checks, and release-tool checks on PRs and pushes to main/master. Stable `vMAJOR.MINOR.PATCH` tags additionally publish/validate the application and ZIP, compile the Inno Setup installer, then create or update one GitHub Release with the installer and portable ZIP. The Store job additionally attaches its validated MSIX when Store packaging is enabled. New releases stay drafts until uploads succeed. Concurrency prevents conflicting runs; only the release job has write permission. PRs receive no Store secrets. Successful retries replace assets; do not retag v1.0.0.
 
 Versions come from tags, independent of the development project version: `v1.0.0` maps to package/file version `1.0.0.0`, `v1.0.1` to `1.0.1.0`, and `v1.1.0` to `1.1.0.0`. Prerelease/build suffixes, leading zeros, major zero, and components above 65534 are rejected (the .NET assembly version limit is narrower than MSIX's). Unsupported tags fail before publishing. CI checks x64 PE architecture, GUI subsystem, icon resources, self-contained .NET 10 bundle contents, file sizes, EXE version, ZIP contents/hash, and CLI self-tests on both the original and extracted EXE. These checks do not prove theme switching or Task Scheduler operation on an interactive PC.
 
-Local portable build (Windows, .NET 10):
+Local portable and installer builds (Windows, .NET 10):
 
 ```powershell
 ./scripts/Build-Portable.ps1 -Tag v1.0.1 -Output artifacts/release-local
-# Use a fresh output directory; the script refuses stale output.
+# Use fresh output directories; the scripts refuse stale output.
+./scripts/Install-InnoCompiler.ps1
+./scripts/Build-Installer.ps1 -Tag v1.0.1 `
+  -Executable artifacts/release-local/AutoDark.exe -Output artifacts/installer-local `
+  -CompilerPath artifacts/inno-tools/compiler/ISCC.exe
 ```
 
 **Microsoft Store:** the manifest contains AutoDark's actual Partner Center identity. Store packaging runs on version tags by default. Repository Actions variables can override the committed identity when needed:
@@ -79,9 +85,9 @@ Local portable build (Windows, .NET 10):
 | `STORE_PUBLISHER` | Exact publisher distinguished name from Partner Center |
 | `STORE_PUBLISHER_DISPLAY_NAME` | Exact publisher display name from Partner Center |
 
-Use Partner Center for product and account identifiers. Invalid identity overrides fail explicitly. The Store job runs separately from GitHub Release publication; its failure makes the workflow report failure but does not withhold valid EXE/ZIP assets.
+Use Partner Center for product and account identifiers. Invalid identity overrides fail explicitly. The Store job runs separately from GitHub Release publication; its failure makes the workflow report failure but does not withhold valid installer/ZIP assets.
 
-Download `AutoDark-Store-submission-<version>` from the tag's Actions run (14-day retention) and extract the `.msix` for manual Partner Center submission. No encryption key or signing secret is required. The MSIX is an Actions artifact, not a GitHub Release asset. [Actions artifacts are accessible to repository readers](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts); artifacts in a public repository are not confidential.
+Download `AutoDark-Store-submission-<version>` from the tag's Actions run (14-day retention) and extract the `.msix` for manual Partner Center submission. No encryption key or signing secret is required. The validated MSIX is also attached to the corresponding GitHub Release after packaging and installer/ZIP publication succeed. It is an unsigned Store submission package; use the Inno Setup installer for normal installation. [Actions artifacts are accessible to repository readers](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts); artifacts in a public repository are not confidential.
 
 For a local Store package, install the Windows 11 SDK, build the portable EXE for the same tag, then run (no identity environment variables are needed):
 
@@ -99,7 +105,7 @@ The Windows 11-only package declares `runFullTrust`, `location`, and `unvirtuali
 
 **Remaining Store blocker:** [MSIX has no general uninstall hook or declarative Task Scheduler cleanup](https://github.com/microsoft/WindowsAppSDK/discussions/3061). Turn OFF before uninstalling; this removes the task and restores the saved theme. Uninstalling while ON removes the alias but can leave an inert scheduled task behind. This pipeline does not claim unconditional uninstall cleanup or Store approval; production Store rollout needs this limitation reviewed in certification. Adding a resident cleanup service or fragile uninstall workaround would conflict with AutoDark's purpose.
 
-Before a release, manually verify on Windows 11 x64: UI/icon/high DPI; ON applies both real registry values; a task runs and exits with the UI closed; OFF removes the task and restores the original mixed theme; resume/restart/logon recovery; no resident process. For MSIX, use a properly signed development package or Partner Center flight, test installation/consent/real registry writes, alias `--self-test` and `--scheduled` invocation, then update to the next version without opening the UI and run the existing task. Confirm OFF-before-uninstall cleanup; also record the known orphan-task behavior if uninstalling while ON. CI is not Windows integration or certification testing.
+Before a release, manually verify installer installation, Start shortcut, Installed apps entry, same-folder upgrade, and uninstall while ON (task removed and previous theme restored). Also verify on Windows 11 x64: UI/icon/high DPI; ON applies both real registry values; a task runs and exits with the UI closed; OFF removes the task and restores the original mixed theme; resume/restart/logon recovery; no resident process. For MSIX, use a properly signed development package or Partner Center flight, test installation/consent/real registry writes, alias `--self-test` and `--scheduled` invocation, then update to the next version without opening the UI and run the existing task. Confirm OFF-before-uninstall cleanup; also record the known orphan-task behavior if uninstalling while ON. CI is not Windows integration or certification testing.
 
 Troubleshooting: invalid tags fail version validation; compilation/test failures stop releases; extra single-file outputs or malformed bundles stop artifact publication; invalid Store identity overrides or missing SDK tools fail only the Store job; MakeAppx/capability errors require the job log and manifest review. `-SkipAudit` on the local portable script is only for an offline build with already-cached Microsoft dependencies when NuGet's audit endpoint is unavailable; CI keeps auditing enabled.
 

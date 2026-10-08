@@ -10,5 +10,6 @@
     <Version>1.0.0</Version>
     <ApplicationIcon>Assets\AutoDark.ico</ApplicationIcon>
     <Description>Local sunrise and sunset Windows theme switching</Description>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
 </Project>

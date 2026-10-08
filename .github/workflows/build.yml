@@ -52,6 +52,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: ./scripts/Build-Portable.ps1 -Tag $env:RELEASE_TAG
+      - name: Build Inno Setup installer
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          ./scripts/Install-InnoCompiler.ps1
+          ./scripts/Build-Installer.ps1 -Tag $env:RELEASE_TAG -Executable artifacts/release/AutoDark.exe -CompilerPath artifacts/inno-tools/compiler/ISCC.exe
+          Copy-Item artifacts/installer/AutoDark-Setup-win-x64.exe artifacts/release/AutoDark-Setup-win-x64.exe
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: startsWith(github.ref, 'refs/tags/v')
         with:
@@ -60,6 +69,7 @@ jobs:
           path: |
             artifacts/release/AutoDark.exe
             artifacts/release/AutoDark-win-x64.zip
+            artifacts/release/AutoDark-Setup-win-x64.exe
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
@@ -81,7 +91,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          foreach ($path in @('artifacts/AutoDark.exe','artifacts/AutoDark-win-x64.zip')) {
+          foreach ($path in @('artifacts/AutoDark-Setup-win-x64.exe','artifacts/AutoDark-win-x64.zip')) {
             if (!(Test-Path -LiteralPath $path) -or (Get-Item -LiteralPath $path).Length -eq 0) { throw "Missing release asset: $path" }
           }
           $null = gh release view "$env:RELEASE_TAG" --json tagName 2>$null
@@ -89,7 +99,7 @@ jobs:
             gh release create "$env:RELEASE_TAG" --verify-tag --draft --generate-notes
             if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
           }
-          gh release upload "$env:RELEASE_TAG" artifacts/AutoDark.exe artifacts/AutoDark-win-x64.zip --clobber
+          gh release upload "$env:RELEASE_TAG" artifacts/AutoDark-Setup-win-x64.exe artifacts/AutoDark-win-x64.zip --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed; new release remains a draft' }
           gh release edit "$env:RELEASE_TAG" --draft=false
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
@@ -121,3 +131,28 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+  release-msix:
+    if: startsWith(github.ref, 'refs/tags/v') && vars.STORE_PACKAGING_ENABLED != 'false'
+    needs: [build, release, store]
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: AutoDark-Store-submission-${{ needs.build.outputs.version }}
+          path: artifacts/store
+      - name: Attach validated Store MSIX to GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $packages = @(Get-ChildItem -LiteralPath artifacts/store -Filter '*.msix' -File)
+          if ($packages.Count -ne 1 -or $packages[0].Length -eq 0 -or $packages[0].Name -cne "AutoDark-$($env:RELEASE_VERSION).0-x64.msix") {
+            throw 'Expected exactly one nonempty validated MSIX matching the release version'
+          }
+          gh release upload "$env:RELEASE_TAG" "$($packages[0].FullName)" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'MSIX release asset upload failed' }

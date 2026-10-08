@@ -14,6 +14,7 @@ internal static class Program
                 if (args is ["--validate-task"]) { Scheduler.ValidateDefinition(); Console.WriteLine($"Native task XML valid; enabled task exists: {Scheduler.Exists()}"); return 0; }
                 if (args is ["--render-ui", var directory]) { SelfTests.RenderForms(directory); return 0; }
                 if (args is ["--scheduled"]) return Automation.Scheduled();
+                if (args is ["--disable"]) { Automation.Disable(); return 0; }
                 return 2;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
