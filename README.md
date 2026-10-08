@@ -117,6 +117,6 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
-[Privacy policy](PRIVACY.md) | [MIT license](LICENSE.txt)
+[Privacy policy](PRIVACY.md) � [MIT license](LICENSE.txt)
 
 Copyright (c) 2026 Danilo Stoletović. Released under the MIT license.
