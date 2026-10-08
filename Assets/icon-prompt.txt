@@ -1,0 +1,6 @@
+Generated using the built-in imagegen tool.
+
+Prompt:
+Use case: logo-brand. Create one finished minimalistic Windows application icon for AutoDark, a sunrise/sunset light/dark theme switcher. Square composition, a single bold circular day/night symbol split into a white sun half and charcoal crescent half, with a simple geometric silhouette, balanced negative space, very readable at 16 and 32 pixels. Flat monochrome, crisp edges. Transparent background outside the symbol. No text, letters, tiny rays, gradients, shadows, texture, mockup, border, or extra objects. Deliver only the icon artwork.
+
+AutoDark.png is the generated source; AutoDark.ico contains 16, 24, 32, 48, 64, 128, and 256-pixel frames for Windows.

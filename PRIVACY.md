@@ -1,0 +1,9 @@
+# Privacy policy
+
+AutoDark collects no telemetry, analytics, advertising identifiers, accounts, or usage history. It has no application network requests, server, weather API, or online sunrise/sunset service. Solar calculations take place entirely on your PC.
+
+If you select Windows location, AutoDark asks Windows for consent from its visible UI and reads coordinates using Windows Geolocation APIs. Subsequent scheduled executions attempt to refresh those coordinates using previously granted access. Windows location services may themselves communicate with Microsoft or other configured providers according to your Windows settings; that operating-system behavior is outside AutoDark. You may instead supply manual coordinates and use AutoDark offline without location services.
+
+Your coordinates, location mode, last successful location timestamp, enabled state, saved pre-ON app/system theme settings, next transition, and latest warning/error are stored in `%LOCALAPPDATA%\AutoDark\preferences.json`. These files are ordinary per-user files, not encrypted. No secrets are stored. A single overwritten `last-error.txt` may contain diagnostic error details, including local paths. AutoDark does not transmit either file. Windows stores a scheduled task containing your user SID and the executable path, and may record execution history in its own logs.
+
+AutoDark changes only its own preference files and scheduled task and the current user's `AppsUseLightTheme` and `SystemUsesLightTheme` registry values. Turning OFF stops automation and removes the scheduled task, restoring your previous app/system theme settings and retaining your preferences. To erase saved data, turn OFF, close AutoDark, and delete `%LOCALAPPDATA%\AutoDark`. You can revoke location permission in Windows Settings ? Privacy & security ? Location. When access is unavailable, AutoDark uses saved coordinates and reports that fact; update them if you have moved.
