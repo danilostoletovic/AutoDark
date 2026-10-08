@@ -50,16 +50,73 @@ Preferences live in `%LOCALAPPDATA%\AutoDark\preferences.json`, written via atom
 
 ## Validation and limitations
 
-Development validation: .NET 10 restore, Release build with warnings as errors, 27 focused solar/scheduling and saved-theme checks, portable win-x64 publish and executable checks, native task XML validation without registration, and rendered standard-control forms. Full registry/theme broadcast, consent, actual task registration/execution, sleep/hibernation/restart recovery, and Visual Studio 2026 Designer interaction require the manual checklist above; native XML validation alone is not end-to-end integration testing.
+Development validation: .NET 10 restore, Release build with warnings as errors, 29 focused solar/scheduling and saved-theme checks, portable win-x64 publish and executable checks, native task XML validation without registration, and rendered standard-control forms. Full registry/theme broadcast, consent, actual task registration/execution, sleep/hibernation/restart recovery, and Visual Studio 2026 Designer interaction require the manual checklist above; native XML validation alone is not end-to-end integration testing.
 
 AutoDark has no idle process after its UI closes; Windows still runs its own Task Scheduler service and launches AutoDark briefly for transitions/maintenance/catch-up. This is not a claim that operating-system resource use is zero. The task runs only while this user is logged on, deliberately avoiding credentials, a service, or administrator setup. Windows services/policies and extreme clock changes can delay recovery; reopening and toggling OFF/ON repairs the schedule. The UI's next-change label refreshes on reopening or an action, without a polling timer.
 
-## Release and future Store distribution
+## Distribution and releases
 
-GitHub Actions builds on Windows using .NET 10, runs focused tests, and publishes a self-contained win-x64 ZIP. Pushing a version tag such as `v1.0.0` creates a GitHub Release. Actions are pinned to immutable commits; only the tag release job receives repository write permission. Set the project version to the intended release version before tagging. Build output is ignored by Git.
+**GitHub Releases:** download `AutoDark.exe` and put it in a permanent folder, or extract `AutoDark-win-x64.zip` (the same EXE). No installer or separately installed .NET runtime is required. These binaries are unsigned; Windows SmartScreen may warn, and no trust/reputation claim is made. Turn OFF before moving/replacing a portable EXE, then ON from its new location: its scheduled task uses that exact path. The compressed, untrimmed EXE includes .NET; required native components extract to the normal per-user temporary cache on first run. No resident service is added.
 
-The app has explicit version/description metadata and remains a conventional per-user desktop executable. MSIX/signing/Store identity are intentionally deferred. A future Store package will need full-trust desktop configuration, location capability/consent review, stable installed-path/update handling for its scheduled action, and Store-policy validation of Task Scheduler behavior. This repository is not a certified Store package.
+The existing workflow runs Release builds, application checks, and release-tool checks on PRs and pushes to main/master. Stable `vMAJOR.MINOR.PATCH` tags additionally publish/validate the EXE and ZIP, then create or update one GitHub Release with both assets. New releases stay drafts until uploads succeed. Concurrency prevents conflicting runs; only the release job has write permission. PRs receive no Store secrets. Successful retries replace assets; do not retag v1.0.0.
 
-[Privacy policy](PRIVACY.md) � [MIT license](LICENSE.txt)
+Versions come from tags, independent of the development project version: `v1.0.0` maps to package/file version `1.0.0.0`, `v1.0.1` to `1.0.1.0`, and `v1.1.0` to `1.1.0.0`. Prerelease/build suffixes, leading zeros, major zero, and components above 65534 are rejected (the .NET assembly version limit is narrower than MSIX's). Unsupported tags fail before publishing. CI checks x64 PE architecture, GUI subsystem, icon resources, self-contained .NET 10 bundle contents, file sizes, EXE version, ZIP contents/hash, and CLI self-tests on both the original and extracted EXE. These checks do not prove theme switching or Task Scheduler operation on an interactive PC.
+
+Local portable build (Windows, .NET 10):
+
+```powershell
+./scripts/Build-Portable.ps1 -Tag v1.0.1 -Output artifacts/release-local
+# Use a fresh output directory; the script refuses stale output.
+```
+
+**Microsoft Store:** reserve AutoDark in Partner Center and copy the exact values from Product identity into repository Actions variables:
+
+| Variable | Value |
+| --- | --- |
+| `STORE_PACKAGING_ENABLED` | `true` to opt in; unset/false skips the Store job |
+| `STORE_IDENTITY_NAME` | Partner Center Package/Identity/Name |
+| `STORE_PUBLISHER` | Complete Partner Center Package/Identity/Publisher (`CN=...`) |
+| `STORE_PUBLISHER_DISPLAY_NAME` | Partner Center publisher display name |
+
+No identity is supplied or invented in the repository. Missing/placeholder identity values fail the opted-in Store job explicitly. That job runs separately from GitHub Release publication; its failure makes the workflow report failure but does not withhold valid EXE/ZIP assets.
+
+Because [GitHub Actions artifacts are readable by repository readers](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/download-workflow-artifacts), public-repository artifacts are not confidential by themselves. Set the Actions **secret** `STORE_ARTIFACT_KEY_BASE64` to a base64-encoded, cryptographically random 32-byte key and keep a secure local copy. The Store job uploads only an authenticated AES-256-CBC/HMAC-SHA256 encrypted `.msix.enc` artifact, never a plaintext MSIX or key. This is artifact encryption, not package signing. Do not put the key or signing material in Git; no production certificates are generated. Generate the key locally using a secret manager or `RandomNumberGenerator`; enter it through GitHub's Secrets UI. Store-only submissions need no signing-certificate/password secret.
+
+Download `AutoDark-Store-submission-<version>` from the tag's Actions run (14-day retention), extract the encrypted file, and decrypt it locally with the same key supplied through the environment:
+
+```powershell
+# Load STORE_ARTIFACT_KEY_BASE64 into the environment from your secure local copy.
+./scripts/Protect-StoreArtifact.ps1 -Mode Decrypt `
+  -InputFile AutoDark-1.0.1.0-x64.msix.enc -OutputFile AutoDark-1.0.1.0-x64.msix
+```
+
+For a local Store package, install the Windows 11 SDK and configure the three identity environment variables above, then run:
+
+```powershell
+./scripts/Build-Store.ps1 -Tag v1.0.1 `
+  -Executable artifacts/release-local/AutoDark.exe -Output artifacts/store-local
+# Optional -MakeAppxPath points to a Microsoft-signed SDK MakeAppx.exe.
+```
+
+MakeAppx validates the manifest without `/nv`, packages the tested EXE and resized existing icon assets, then unpacks it for identity/version/architecture/entry-point/asset/hash checks. Output is `AutoDark-1.0.1.0-x64.msix`: an **unsigned Store submission candidate**, not a public sideload release. Upload the decrypted `.msix` under Partner Center's MSIX app submission Packages section, complete listing/privacy/capability declarations, and run Windows App Certification Kit plus the integration checklist below before submission. [Microsoft documents Store signing of MSIX submissions](https://learn.microsoft.com/en-us/windows/apps/publish/get-started): a CA-trusted signature is not needed for this Store submission path; the Store signs packages after certification. Identity checks, restricted-capability approval, and certification remain mandatory; unsigned packages are not automatically accepted or normally user-installable. Sideloading would need separate trusted SHA-256 signing with a certificate matching Publisher; this pipeline publishes no sideload MSIX.
+
+**Packaged Task Scheduler compatibility:** the only application-code change detects package identity and schedules `%LOCALAPPDATA%\Microsoft\WindowsApps\<PackageFamilyName>\AutoDark.Store.exe --scheduled`. Windows manages this [app execution alias](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/desktop-to-uwp-extensions), with a version-independent per-family path instead of a versioned WindowsApps installation directory. User SID, task name, interactive token, triggers, OFF removal, and zero-resident-process architecture stay the same. No shell/helper/service is installed. The alias must remain enabled in Windows Settings; an unavailable alias produces an explicit error. [Microsoft documents per-family aliases and their removal on uninstall](https://learn.microsoft.com/en-us/sysinternals/downloads/microsoft-store).
+
+The Windows 11-only package declares `runFullTrust`, `location`, and `unvirtualizedResources`, with a [narrow registry virtualization exclusion](https://learn.microsoft.com/en-us/windows/msix/desktop/flexible-virtualization) for the existing Personalize theme key. Otherwise registry read-back could falsely succeed while the real Windows theme remains unchanged. Partner Center must approve restricted capabilities. AppData uses normal MSIX virtualization; saved configuration survives updates but portable/packaged copies must not be enabled together. Keep package identity, Application Id, and alias unchanged across upgrades.
+
+**Remaining Store blocker:** [MSIX has no general uninstall hook or declarative Task Scheduler cleanup](https://github.com/microsoft/WindowsAppSDK/discussions/3061). Turn OFF before uninstalling; this removes the task and restores the saved theme. Uninstalling while ON removes the alias but can leave an inert scheduled task behind. This pipeline does not claim unconditional uninstall cleanup or Store approval; production Store rollout needs this limitation reviewed in certification. Adding a resident cleanup service or fragile uninstall workaround would conflict with AutoDark's purpose.
+
+Before a release, manually verify on Windows 11 x64: UI/icon/high DPI; ON applies both real registry values; a task runs and exits with the UI closed; OFF removes the task and restores the original mixed theme; resume/restart/logon recovery; no resident process. For MSIX, use a properly signed development package or Partner Center flight, test installation/consent/real registry writes, alias `--self-test` and `--scheduled` invocation, then update to the next version without opening the UI and run the existing task. Confirm OFF-before-uninstall cleanup; also record the known orphan-task behavior if uninstalling while ON. CI is not Windows integration or certification testing.
+
+Troubleshooting: invalid tags fail version validation; compilation/test failures stop releases; extra single-file outputs or malformed bundles stop artifact publication; missing Store variables/key or SDK tools fail only the opted-in Store job; MakeAppx/capability errors require the job log and manifest review. `-SkipAudit` on the local portable script is only for an offline build with already-cached Microsoft dependencies when NuGet's audit endpoint is unavailable; CI keeps auditing enabled.
+
+Create the next release after committing the changes:
+
+```powershell
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+[Privacy policy](PRIVACY.md) | [MIT license](LICENSE.txt)
 
 Copyright (c) 2026 Danilo Stoletović. Released under the MIT license.

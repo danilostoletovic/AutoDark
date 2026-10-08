@@ -93,6 +93,10 @@ internal static class SelfTests
         Check(xml.Descendants(ns + "StartBoundary").First().Value.EndsWith('Z'), "UTC scheduling boundary");
         Check(xml.Descendants(ns + "StartWhenAvailable").Single().Value == "true", "Missed-run recovery");
         Check(xml.Descendants(ns + "MultipleInstancesPolicy").Single().Value == "IgnoreNew", "No duplicate task instances");
+        string alias = Scheduler.PackagedExecutionPath(@"C:\Users\Test\AppData\Local", "PartnerIdentity_publisherId");
+        var packagedXml = XDocument.Parse(Scheduler.Definition("S-1-5-21-test", alias, now.AddHours(1), now));
+        Check(packagedXml.Descendants(ns + "Command").Single().Value == alias && !alias.Contains("1.0.0.0"), "Packaged scheduling uses version-independent family alias");
+        Check(packagedXml.Descendants(ns + "Arguments").Single().Value == "--scheduled", "Packaged scheduling preserves CLI arguments");
         var preferences = new Preferences
         {
             Enabled = true,

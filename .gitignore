@@ -368,3 +368,9 @@ artifacts/
 .codex/
 .agents/
 .aws/
+# Private signing and Store artifact key material
+*.pfx
+*.p12
+*.pem
+*.key
+!Properties/PublishProfiles/Portable.pubxml

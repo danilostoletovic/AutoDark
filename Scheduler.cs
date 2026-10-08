@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Xml.Linq;
+using System.Text;
 
 namespace AutoDark;
 
@@ -39,9 +40,7 @@ internal static class Scheduler
 
     internal static void Register(DateTimeOffset next)
     {
-        string executable = Environment.ProcessPath ?? throw new IOException("Cannot locate AutoDark.exe.");
-        if (!Path.GetFileName(executable).Equals("AutoDark.exe", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Run AutoDark.exe directly to enable scheduling.");
+        string executable = ExecutionPath();
         WithFolder(folder =>
         {
             object task = folder.RegisterTask(TaskName, Definition(UserSid, executable, next, DateTimeOffset.UtcNow), 6, UserSid, null, 3, null);
@@ -52,6 +51,33 @@ internal static class Scheduler
             finally { Marshal.FinalReleaseComObject(task); }
         });
     }
+
+    internal static string ExecutionPath()
+    {
+        uint length = 0;
+        int result = GetCurrentPackageFamilyName(ref length, null);
+        if (result == 15700) // APPMODEL_ERROR_NO_PACKAGE: portable behavior stays unchanged.
+        {
+            string path = Environment.ProcessPath ?? throw new IOException("Cannot locate AutoDark.exe.");
+            if (!Path.GetFileName(path).Equals("AutoDark.exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Run AutoDark.exe directly to enable scheduling.");
+            return path;
+        }
+        if (result != 122) throw new System.ComponentModel.Win32Exception(result);
+        var family = new StringBuilder((int)length);
+        result = GetCurrentPackageFamilyName(ref length, family);
+        if (result != 0) throw new System.ComponentModel.Win32Exception(result);
+        string alias = PackagedExecutionPath(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), family.ToString());
+        if (!File.Exists(alias))
+            throw new IOException("AutoDark's Windows app execution alias is unavailable. Enable AutoDark.Store.exe in Windows Settings > Apps > Advanced app settings > App execution aliases, then try again.");
+        return alias;
+    }
+
+    internal static string PackagedExecutionPath(string localAppData, string family) =>
+        Path.Combine(localAppData, "Microsoft", "WindowsApps", family, "AutoDark.Store.exe");
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetCurrentPackageFamilyName(ref uint length, StringBuilder? family);
 
     internal static void ValidateDefinition() => WithFolder(folder =>
     {
